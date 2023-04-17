@@ -132,7 +132,7 @@ def main(opt):
     seed_everything(1004)
     with open(opt.data, encoding='UTF-8') as f:
         _cfg = yaml.load(f, Loader=yaml.FullLoader)
-
+    category = _cfg['target_labels']
     model_path = _cfg['sub_model']
     names = _cfg['sub_names']
     dataset_p = _cfg['sub_train']
@@ -143,13 +143,13 @@ def main(opt):
 
     trans = data_transforms_img(opt.imgsz)
 
-    if len(names) != len(model_path) != len(dataset_p):
+    if len(names) != len(model_path) != len(dataset_p) != len(category):
         print(f"check {opt.data} plz. Length of data must be same.")
         exit()
 
 
 
-    for cid, d_p, m_p, name in zip(range(len(model_path)), dataset_p, model_path, names):
+    for cid, d_p, m_p, name in zip(category, dataset_p, model_path, names):
         train_path = f'{d_p}/train/'
         valid_path = f'{d_p}/valid/'
         train_dataset = ImageFolder(train_path, transform=Transforms(transforms=trans['train']))
@@ -177,8 +177,9 @@ def main(opt):
                                       weight= opt.det_w, target_labels=[cid])
 
     #test model
-    det_acc = infer_detect(weight=opt.det_w, path=opt.test_path, target_labels=range(len(model_path)))
+    det_acc = infer_detect(weight=opt.det_w, path=opt.test_path, target_labels=category)
     print("final Acc :", det_acc)
+
 if __name__ == '__main__':
     opt = parse_opt()
     main(opt)

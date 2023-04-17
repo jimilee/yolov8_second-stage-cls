@@ -18,9 +18,7 @@ sub_train:  ['dataset/0',#  dataset path for classifier(cropped images)'
 sub_model: ['runs/sub_models/model1.pt',
             'runs/sub_models/model2.pt'] # path to timm model file,
 
-#sub_data: ['ultralytics/models/sub_models/emb_model/final_ㄱ_labels.json',
-#            'ultralytics/models/sub_models/emb_model/final_ㅁ_labels.json']# path to timm model class names
-sub_data : ['','']
+sub_data : ['',''] # path to timm model class names
 # Train settings -------------------------------------------------------------------------------------------------------
 model:  # path to model file, i.e. yolov8n.pt, yolov8n.yaml
 data:  # path to data file, i.e. i.e. coco128.yaml
