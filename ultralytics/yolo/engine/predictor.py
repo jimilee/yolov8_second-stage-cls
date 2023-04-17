@@ -1,9 +1,8 @@
 # Ultralytics YOLO 🚀, GPL-3.0 license
 """
 Run prediction on images, videos, directories, globs, YouTube, webcam, streams, etc.
-
 Usage - sources:
-    $ yolo mode=predict model=yolov8n.pt source=0                               # webcam
+    $ yolo task=... mode=predict  model=s.pt --source 0                         # webcam
                                                 img.jpg                         # image
                                                 vid.mp4                         # video
                                                 screen                          # screenshot
@@ -13,47 +12,43 @@ Usage - sources:
                                                 'path/*.jpg'                    # glob
                                                 'https://youtu.be/Zgi9g1ksQHc'  # YouTube
                                                 'rtsp://example.com/media.mp4'  # RTSP, RTMP, HTTP stream
-
 Usage - formats:
-    $ yolo mode=predict model=yolov8n.pt                 # PyTorch
-                              yolov8n.torchscript        # TorchScript
-                              yolov8n.onnx               # ONNX Runtime or OpenCV DNN with dnn=True
-                              yolov8n_openvino_model     # OpenVINO
-                              yolov8n.engine             # TensorRT
-                              yolov8n.mlmodel            # CoreML (macOS-only)
-                              yolov8n_saved_model        # TensorFlow SavedModel
-                              yolov8n.pb                 # TensorFlow GraphDef
-                              yolov8n.tflite             # TensorFlow Lite
-                              yolov8n_edgetpu.tflite     # TensorFlow Edge TPU
-                              yolov8n_paddle_model       # PaddlePaddle
-"""
+    $ yolo task=... mode=predict --weights yolov8n.pt          # PyTorch
+                                    yolov8n.torchscript        # TorchScript
+                                    yolov8n.onnx               # ONNX Runtime or OpenCV DNN with --dnn
+                                    yolov8n_openvino_model     # OpenVINO
+                                    yolov8n.engine             # TensorRT
+                                    yolov8n.mlmodel            # CoreML (macOS-only)
+                                    yolov8n_saved_model        # TensorFlow SavedModel
+                                    yolov8n.pb                 # TensorFlow GraphDef
+                                    yolov8n.tflite             # TensorFlow Lite
+                                    yolov8n_edgetpu.tflite     # TensorFlow Edge TPU
+                                    yolov8n_paddle_model       # PaddlePaddle
+    """
+import json
+import pickle
+import os.path
 import platform
+import random
+from collections import defaultdict
+from datetime import time
 from pathlib import Path
 
 import cv2
+import torch
+import timm
 
 from ultralytics.nn.autobackend import AutoBackend
 from ultralytics.yolo.cfg import get_cfg
-from ultralytics.yolo.data import load_inference_source
-from ultralytics.yolo.data.augment import classify_transforms
+from ultralytics.yolo.data.dataloaders.stream_loaders import LoadImages, LoadPilAndNumpy, LoadScreenshots, LoadStreams
+from ultralytics.yolo.data.sub_datautil import get_black_label, data_transforms_img
+from ultralytics.yolo.data.utils import IMG_FORMATS, VID_FORMATS
 from ultralytics.yolo.utils import DEFAULT_CFG, LOGGER, SETTINGS, callbacks, colorstr, ops
-from ultralytics.yolo.utils.checks import check_imgsz, check_imshow
+from ultralytics.yolo.utils.checks import check_file, check_imgsz, check_imshow
 from ultralytics.yolo.utils.files import increment_path
+from ultralytics.yolo.utils.plotting import save_one_box
 from ultralytics.yolo.utils.torch_utils import select_device, smart_inference_mode
-
-STREAM_WARNING = """
-    WARNING ⚠️ stream/video/webcam/dir predict source will accumulate results in RAM unless `stream=True` is passed,
-    causing potential out-of-memory errors for large sources or long-running streams/videos.
-
-    Usage:
-        results = model(source=..., stream=True)  # generator of Results objects
-        for r in results:
-            boxes = r.boxes  # Boxes object for bbox outputs
-            masks = r.masks  # Masks object for segment masks outputs
-            probs = r.probs  # Class probabilities for classification outputs
-"""
-
-
+from ultralytics.yolo.engine.results import SubResults
 class BasePredictor:
     """
     BasePredictor
@@ -74,7 +69,7 @@ class BasePredictor:
         data_path (str): Path to data.
     """
 
-    def __init__(self, cfg=DEFAULT_CFG, overrides=None, _callbacks=None):
+    def __init__(self, cfg=DEFAULT_CFG, overrides=None):
         """
         Initializes the BasePredictor class.
 
@@ -84,207 +79,378 @@ class BasePredictor:
         """
         self.args = get_cfg(cfg, overrides)
         project = self.args.project or Path(SETTINGS['runs_dir']) / self.args.task
-        name = self.args.name or f'{self.args.mode}'
+        name = self.args.name or f"{self.args.mode}"
         self.save_dir = increment_path(Path(project) / name, exist_ok=self.args.exist_ok)
         if self.args.conf is None:
             self.args.conf = 0.25  # default conf=0.25
         self.done_warmup = False
-        if self.args.show:
-            self.args.show = check_imshow(warn=True)
 
         # Usable if setup is done
         self.model = None
+        self.sub_model = {}
+        self.labels = []
+        # self.target_labels = self.args.target_labels # target labels
         self.data = self.args.data  # data_dict
+        self.bs = None
         self.imgsz = None
         self.device = None
+        self.classes = self.args.classes
         self.dataset = None
         self.vid_path, self.vid_writer = None, None
-        self.plotted_img = None
+        self.annotator = None
         self.data_path = None
-        self.source_type = None
-        self.batch = None
-        self.callbacks = _callbacks or callbacks.get_default_callbacks()
-        callbacks.add_integration_callbacks(self)
+        self.callbacks = defaultdict(list, callbacks.default_callbacks)  # add callbacks
+        self.data_transforms = data_transforms_img(528) # sub_image size
+
 
     def preprocess(self, img):
         pass
 
-    def write_results(self, idx, results, batch):
-        p, im, _ = batch
-        log_string = ''
-        if len(im.shape) == 3:
-            im = im[None]  # expand for batch dim
-        self.seen += 1
-        if self.source_type.webcam or self.source_type.from_img:  # batch_size >= 1
-            log_string += f'{idx}: '
-            frame = self.dataset.count
-        else:
-            frame = getattr(self.dataset, 'frame', 0)
-        self.data_path = p
-        self.txt_path = str(self.save_dir / 'labels' / p.stem) + ('' if self.dataset.mode == 'image' else f'_{frame}')
-        log_string += '%gx%g ' % im.shape[2:]  # print string
-        result = results[idx]
-        log_string += result.verbose()
+    def get_annotator(self, img):
+        raise NotImplementedError("get_annotator function needs to be implemented")
 
-        if self.args.save or self.args.show:  # Add bbox to image
-            plot_args = dict(line_width=self.args.line_thickness, boxes=self.args.boxes)
-            if not self.args.retina_masks:
-                plot_args['im_gpu'] = im[idx]
-            self.plotted_img = result.plot(**plot_args)
+    def write_results(self, results, batch, print_string):
+        raise NotImplementedError("print_results function needs to be implemented")
+
+    def second_stage_process(self, idx, results, batch, classes=None):
+        # sub models.
+        p, im, im0 = batch
+        det = results[idx].boxes
+        sub_str = "None"
+        _cat, _lidx, _bbox, isTrue = None, None, None, True
         # write
-        if self.args.save_txt:
-            result.save_txt(f'{self.txt_path}.txt', save_conf=self.args.save_conf)
-        if self.args.save_crop:
-            result.save_crop(save_dir=self.save_dir / 'crops', file_name=self.data_path.stem)
+        # if len(list(reversed(det))) > 1:
+        #     for d in list(det):
+        #         cls, conf = d.cls.squeeze(), d.conf.squeeze()
+        #         print(cls, conf)
+        for d in list(det):
+            cls, conf = d.cls.squeeze(), d.conf.squeeze()
+            c = int(cls)  # integer class
 
-        return log_string
+            # Second-stage classifier
+            if c in self.args.target_labels:
+                imc = im0.copy()
+                _bbox = d.xyxy.squeeze()
+                imsub = save_one_box(_bbox, imc, BGR=True, save=False)  # make crop bbox img
+                _bbox = _bbox.tolist()
+                _cat = c
+                # # Save cropped image
+                # im1 = self.data_transforms[1]['save'](image=imsub)["image"]
+                # test_cl = str(p).split('/')[-2:]
+                # if not os.path.isdir(f"runs/test_for_class/{c}/{test_cl[0]}"):
+                #     os.mkdir(f"runs/test_for_class/{c}/{test_cl[0]}")
+                # test_cl[-1] = 'e_'+test_cl[-1]
+                # test_cl = '/'.join(test_cl)
+                # cv2.imwrite(f"runs/test_for_class/{c}/{test_cl}", im1)
 
-    def postprocess(self, preds, img, orig_img):
-        return preds
+                try:
+                    if str(p).split('/')[-2].isdigit(): # if digit
+                        _correct = int(str(p).split('/')[-2])
+                    else:
+                        _correct = str(p).split('/')[-2]
+                except:
+                    _correct = -1
 
+                im1 = self.data_transforms['valid'](image=imsub)["image"]
+                im1 = torch.unsqueeze(im1, 0).to(self.device)
+                with torch.no_grad():
+                    self.sub_model[c].eval()
+                    out = self.sub_model[c](im1)
+                    # print(out[0])
+                    # print(c, len(out[0]), out.argmax(dim=1).item(), max(out[0]), out[0][out.argmax(dim=1).item()])
+                    _idx = out.argmax(dim=1).item()
+                    # print(self.labels[c][363])
+                    _lidx = self.labels[c][_idx].split('_')
+
+                    if _correct != -1 : # if folder name is digit. --> check result.
+                        if str(_correct).isdigit():
+                            sub_str = f'[ {str(_lidx[0])} ]_{str(_lidx[1])} / {str(int(_lidx[1]) == _correct)}'
+                            isTrue = int(_lidx[1]) == _correct
+                        else:
+                            sub_str = f'[ {str(_lidx[0])} ]_{str(_lidx[1])} / {str(int(_lidx[1]) == _correct)}'
+                            isTrue = str(_lidx[1]) == _correct
+                        # print(isTrue)
+
+                    else:
+                        sub_str = f'[ {str(_lidx[0])} ]_{str(_idx)}'
+            break
+
+        return sub_str, SubResults(boxes=_bbox, category=_cat, classes=_lidx, result=isTrue), isTrue
+
+    def setup_source(self, source=None):
+        if not self.model:
+            raise Exception("setup model before setting up source!")
+        # source
+        source, webcam, screenshot, from_img = self.check_source(source)
+        # model
+        stride, pt = self.model.stride, self.model.pt
+        imgsz = check_imgsz(self.args.imgsz, stride=stride, min_dim=2)  # check image size
+
+        # Dataloader
+        bs = 1  # batch_size
+        if webcam:
+            self.args.show = check_imshow(warn=True)
+            self.dataset = LoadStreams(source,
+                                       imgsz=imgsz,
+                                       stride=stride,
+                                       auto=pt,
+                                       transforms=getattr(self.model.model, 'transforms', None),
+                                       vid_stride=self.args.vid_stride)
+            bs = len(self.dataset)
+        elif screenshot:
+            self.dataset = LoadScreenshots(source,
+                                           imgsz=imgsz,
+                                           stride=stride,
+                                           auto=pt,
+                                           transforms=getattr(self.model.model, 'transforms', None))
+        elif from_img:
+            self.dataset = LoadPilAndNumpy(source,
+                                           imgsz=imgsz,
+                                           stride=stride,
+                                           auto=pt,
+                                           transforms=getattr(self.model.model, 'transforms', None))
+        else:
+            self.dataset = LoadImages(source,
+                                      imgsz=imgsz,
+                                      stride=stride,
+                                      auto=pt,
+                                      transforms=getattr(self.model.model, 'transforms', None),
+                                      vid_stride=self.args.vid_stride)
+        self.vid_path, self.vid_writer = [None] * bs, [None] * bs
+
+        self.webcam = webcam
+        self.screenshot = screenshot
+        self.from_img = from_img
+        self.imgsz = imgsz
+        self.bs = bs
+
+    @smart_inference_mode()
     def __call__(self, source=None, model=None, stream=False):
-        self.stream = stream
         if stream:
             return self.stream_inference(source, model)
         else:
             return list(self.stream_inference(source, model))  # merge list of Result into one
 
-    def predict_cli(self, source=None, model=None):
+    def predict_cli(self):
         # Method used for CLI prediction. It uses always generator as outputs as not required by CLI mode
-        gen = self.stream_inference(source, model)
+        gen = self.stream_inference()
         for _ in gen:  # running CLI inference without accumulating any outputs (do not modify)
             pass
 
-    def setup_source(self, source):
-        self.imgsz = check_imgsz(self.args.imgsz, stride=self.model.stride, min_dim=2)  # check image size
-        if self.args.task == 'classify':
-            transforms = getattr(self.model.model, 'transforms', classify_transforms(self.imgsz[0]))
-        else:  # predict, segment
-            transforms = None
-        self.dataset = load_inference_source(source=source,
-                                             transforms=transforms,
-                                             imgsz=self.imgsz,
-                                             vid_stride=self.args.vid_stride,
-                                             stride=self.model.stride,
-                                             auto=self.model.pt)
-        self.source_type = self.dataset.source_type
-        if not getattr(self, 'stream', True) and (self.dataset.mode == 'stream' or  # streams
-                                                  len(self.dataset) > 1000 or  # images
-                                                  any(getattr(self.dataset, 'video_flag', [False]))):  # videos
-            LOGGER.warning(STREAM_WARNING)
-        self.vid_path, self.vid_writer = [None] * self.dataset.bs, [None] * self.dataset.bs
-
-    @smart_inference_mode()
     def stream_inference(self, source=None, model=None):
-        if self.args.verbose:
-            LOGGER.info('')
-
+        self.run_callbacks("on_predict_start")
         # setup model
         if not self.model:
             self.setup_model(model)
-        # setup source every time predict is called
-        self.setup_source(source if source is not None else self.args.source)
+        if not self.sub_model and self.args.sub:
+            print('warm up models')
+            self.setup_submodel()
 
+        # setup source. Run every time predict is called
+        self.setup_source(source)
         # check if save_dir/ label file exists
         if self.args.save or self.args.save_txt:
             (self.save_dir / 'labels' if self.args.save_txt else self.save_dir).mkdir(parents=True, exist_ok=True)
         # warmup model
         if not self.done_warmup:
-            self.model.warmup(imgsz=(1 if self.model.pt or self.model.triton else self.dataset.bs, 3, *self.imgsz))
+            self.model.warmup(imgsz=(1 if self.model.pt or self.model.triton else self.bs, 3, *self.imgsz))
             self.done_warmup = True
 
         self.seen, self.windows, self.dt, self.batch = 0, [], (ops.Profile(), ops.Profile(), ops.Profile()), None
-        self.run_callbacks('on_predict_start')
         for batch in self.dataset:
-            self.run_callbacks('on_predict_batch_start')
+            self.run_callbacks("on_predict_batch_start")
             self.batch = batch
             path, im, im0s, vid_cap, s = batch
             visualize = increment_path(self.save_dir / Path(path).stem, mkdir=True) if self.args.visualize else False
-
-            # preprocess
             with self.dt[0]:
                 im = self.preprocess(im)
                 if len(im.shape) == 3:
                     im = im[None]  # expand for batch dim
 
-            # inference
+            # Inference
             with self.dt[1]:
                 preds = self.model(im, augment=self.args.augment, visualize=visualize)
 
             # postprocess
             with self.dt[2]:
-                self.results = self.postprocess(preds, im, im0s)
-            self.run_callbacks('on_predict_postprocess_end')
+                self.results = self.postprocess(preds, im, im0s, self.classes)
 
-            # visualize, save, write results
-            n = len(im)
-            for i in range(n):
-                self.results[i].speed = {
-                    'preprocess': self.dt[0].dt * 1E3 / n,
-                    'inference': self.dt[1].dt * 1E3 / n,
-                    'postprocess': self.dt[2].dt * 1E3 / n}
-                if self.source_type.tensor:  # skip write, show and plot operations if input is raw tensor
-                    continue
-                p, im0 = (path[i], im0s[i].copy()) if self.source_type.webcam or self.source_type.from_img \
-                    else (path, im0s.copy())
+            self.sub_results = []
+            for i in range(len(im)):
+                p, im0 = (path[i], im0s[i]) if self.webcam or self.from_img else (path, im0s)
                 p = Path(p)
+                sub_str = ''
+                if self.args.sub: # Sub Classification
+                    sub_str, sub_res, isTrue = self.second_stage_process(i, self.results, (p, im, im0), self.classes)
+                    self.sub_results.append(sub_res)
+                    #
+                    # # LKJ
+                    # if sub_res == None:
+                    #     # print("infered_value is None")
+                    #     Inference.infered_value = ""
+                    # elif sub_res.cls == None:
+                    #     # print("infered_value class is None")
+                    #     Inference.infered_value = ""
+                    # else:
+                    #     # print("infered_value:" + str(sub_res.cls))
+                    #     Inference.infered_value = sub_res.cls[0]
 
                 if self.args.verbose or self.args.save or self.args.save_txt or self.args.show:
-                    s += self.write_results(i, self.results, (p, im, im0))
+                    s += self.write_results(i, self.results, (p, im, im0), sub_str)
 
-                if self.args.show and self.plotted_img is not None:
+                if self.args.show:
                     self.show(p)
 
-                if self.args.save and self.plotted_img is not None:
+                if self.args.save:
                     self.save_preds(vid_cap, i, str(self.save_dir / p.name))
-            self.run_callbacks('on_predict_batch_end')
-            yield from self.results
+
+            self.run_callbacks("on_predict_batch_end")
+            yield from self.sub_results
 
             # Print time (inference-only)
             if self.args.verbose:
-                LOGGER.info(f'{s}{self.dt[1].dt * 1E3:.1f}ms')
-
-        # Release assets
-        if isinstance(self.vid_writer[-1], cv2.VideoWriter):
-            self.vid_writer[-1].release()  # release final video writer
+                LOGGER.info(f"{s}{'' if len(preds) else '(no detections), '}{self.dt[1].dt * 1E3:.1f}ms")
 
         # Print results
         if self.args.verbose and self.seen:
             t = tuple(x.t / self.seen * 1E3 for x in self.dt)  # speeds per image
-            LOGGER.info(f'Speed: %.1fms preprocess, %.1fms inference, %.1fms postprocess per image at shape '
+            LOGGER.info(f'Speed: %.1fms pre-process, %.1fms inference, %.1fms postprocess per image at shape '
                         f'{(1, 3, *self.imgsz)}' % t)
-        if self.args.save or self.args.save_txt or self.args.save_crop:
+        if (self.args.save_txt or self.args.save) and self.args.verbose:
             nl = len(list(self.save_dir.glob('labels/*.txt')))  # number of labels
             s = f"\n{nl} label{'s' * (nl > 1)} saved to {self.save_dir / 'labels'}" if self.args.save_txt else ''
             LOGGER.info(f"Results saved to {colorstr('bold', self.save_dir)}{s}")
 
-        self.run_callbacks('on_predict_end')
+        self.run_callbacks("on_predict_end")
 
-    def setup_model(self, model, verbose=True):
-        device = select_device(self.args.device, verbose=verbose)
+
+    # def _stream_inference(self, source=None, model=None): # original code
+    #     self.run_callbacks("on_predict_start")
+    #     # setup model
+    #     if not self.model:
+    #         self.setup_model(model)
+    #     # setup source. Run every time predict is called
+    #     self.setup_source(source)
+    #     # check if save_dir/ label file exists
+    #     if self.args.save or self.args.save_txt:
+    #         (self.save_dir / 'labels' if self.args.save_txt else self.save_dir).mkdir(parents=True, exist_ok=True)
+    #     # warmup model
+    #     if not self.done_warmup:
+    #         self.model.warmup(imgsz=(1 if self.model.pt or self.model.triton else self.bs, 3, *self.imgsz))
+    #         self.done_warmup = True
+    #
+    #     self.seen, self.windows, self.dt, self.batch = 0, [], (ops.Profile(), ops.Profile(), ops.Profile()), None
+    #     for batch in self.dataset:
+    #         self.run_callbacks("on_predict_batch_start")
+    #         self.batch = batch
+    #         path, im, im0s, vid_cap, s = batch
+    #         visualize = increment_path(self.save_dir / Path(path).stem, mkdir=True) if self.args.visualize else False
+    #         with self.dt[0]:
+    #             im = self.preprocess(im)
+    #             if len(im.shape) == 3:
+    #                 im = im[None]  # expand for batch dim
+    #
+    #         # Inference
+    #         with self.dt[1]:
+    #             preds = self.model(im, augment=self.args.augment, visualize=visualize)
+    #
+    #         # postprocess
+    #         with self.dt[2]:
+    #             self.results = self.postprocess(preds, im, im0s, self.classes)
+    #         for i in range(len(im)):
+    #             p, im0 = (path[i], im0s[i]) if self.webcam or self.from_img else (path, im0s)
+    #             p = Path(p)
+    #
+    #             if self.args.verbose or self.args.save or self.args.save_txt or self.args.show:
+    #                 s += self.write_results(i, self.results, (p, im, im0))
+    #
+    #             if self.args.show:
+    #                 self.show(p)
+    #
+    #             if self.args.save:
+    #                 self.save_preds(vid_cap, i, str(self.save_dir / p.name))
+    #
+    #         self.run_callbacks("on_predict_batch_end")
+    #         yield from self.results
+    #
+    #         # Print time (inference-only)
+    #         if self.args.verbose:
+    #             LOGGER.info(f"{s}{'' if len(preds) else '(no detections), '}{self.dt[1].dt * 1E3:.1f}ms")
+    #
+    #     # Print results
+    #     if self.args.verbose and self.seen:
+    #         t = tuple(x.t / self.seen * 1E3 for x in self.dt)  # speeds per image
+    #         LOGGER.info(f'Speed: %.1fms pre-process, %.1fms inference, %.1fms postprocess per image at shape '
+    #                     f'{(1, 3, *self.imgsz)}' % t)
+    #     if self.args.save_txt or self.args.save:
+    #         nl = len(list(self.save_dir.glob('labels/*.txt')))  # number of labels
+    #         s = f"\n{nl} label{'s' * (nl > 1)} saved to {self.save_dir / 'labels'}" if self.args.save_txt else ''
+    #         LOGGER.info(f"Results saved to {colorstr('bold', self.save_dir)}{s}")
+    #
+    #     self.run_callbacks("on_predict_end")
+
+    def setup_model(self, model):
+        device = select_device(self.args.device)
         model = model or self.args.model
         self.args.half &= device.type != 'cpu'  # half precision only supported on CUDA
-        self.model = AutoBackend(model,
-                                 device=device,
-                                 dnn=self.args.dnn,
-                                 data=self.args.data,
-                                 fp16=self.args.half,
-                                 fuse=True,
-                                 verbose=verbose)
+        self.model = AutoBackend(model, device=device, dnn=self.args.dnn, fp16=self.args.half)
         self.device = device
         self.model.eval()
 
+    def setup_submodel(self):
+        sub_weights_paths = self.args.sub_model # model path.
+        sub_labels_paths = self.args.sub_data
+        model_name = self.args.sub_names
+        for i in self.args.target_labels:
+            wp, jp = sub_weights_paths[i], sub_labels_paths[i]
+            if not os.path.isfile(jp):
+                save_dir = '/'.join(wp.split('/')[:-1])
+                jp = save_dir + f'/label_data_{i}.pkl' # default pkl path
+            with open(jp, 'rb') as f:
+                label_ = pickle.load(f)
+                self.labels.append(label_)
+
+            nc = len(label_)
+            model = timm.create_model(model_name=model_name[i], num_classes=nc)
+
+            if os.path.isfile(wp):
+                checkpoint = torch.load(wp, map_location=self.device)
+                model.load_state_dict(checkpoint)
+            model.to(self.device)
+            model.eval()
+
+            self.sub_model[i]=model
+
+            # trained_weights = torch.load(sub_weights, map_location=device)
+            # self.sub_model.load_state_dict(trained_weights)
+            # self.sub_model.eval()
+
+    def check_source(self, source):
+        source = source if source is not None else self.args.source
+        webcam, screenshot, from_img = False, False, False
+        if isinstance(source, (str, int, Path)):  # int for local usb carame
+            source = str(source)
+            is_file = Path(source).suffix[1:] in (IMG_FORMATS + VID_FORMATS)
+            is_url = source.lower().startswith(('https://', 'http://', 'rtsp://', 'rtmp://'))
+            webcam = source.isnumeric() or source.endswith('.streams') or (is_url and not is_file)
+            screenshot = source.lower().startswith('screen')
+            if is_url and is_file:
+                source = check_file(source)  # download
+        else:
+            from_img = True
+        return source, webcam, screenshot, from_img
+
     def show(self, p):
-        im0 = self.plotted_img
+        im0 = self.annotator.result()
         if platform.system() == 'Linux' and p not in self.windows:
             self.windows.append(p)
             cv2.namedWindow(str(p), cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)  # allow window resize (Linux)
             cv2.resizeWindow(str(p), im0.shape[1], im0.shape[0])
         cv2.imshow(str(p), im0)
-        cv2.waitKey(500 if self.batch[4].startswith('image') else 1)  # 1 millisecond
+        cv2.waitKey(1)  # 1 millisecond
 
     def save_preds(self, vid_cap, idx, save_path):
-        im0 = self.plotted_img
+        im0 = self.annotator.result()
         # save imgs
         if self.dataset.mode == 'image':
             cv2.imwrite(save_path, im0)
@@ -306,9 +472,3 @@ class BasePredictor:
     def run_callbacks(self, event: str):
         for callback in self.callbacks.get(event, []):
             callback(self)
-
-    def add_callback(self, event: str, func):
-        """
-        Add callback
-        """
-        self.callbacks[event].append(func)

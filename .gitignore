@@ -3,6 +3,11 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+dataset/
+*.jpg
+*.pt
+
+
 # C extensions
 *.so
 
@@ -101,7 +106,7 @@ __pypackages__/
 celerybeat-schedule
 celerybeat.pid
 
-# SageMath parsed files
+# SageMath parsed files1 -
 *.sage.py
 
 # Environments
