@@ -1,9 +1,10 @@
-## Yolov8 with timm second stage Models
+## Yolov8 with Pytorch Image Models (timm) second stage Models
 
-this repository based on https://github.com/ultralytics/ultralytics
 ### Sub classification setting
 modify ultralytics/yolo/cfg/default.yaml file.
 ```
+'''
+
 # Sub classification setting
 sub: True
 
@@ -20,6 +21,8 @@ sub_model: ['runs/sub_models/model1.pt',
             'runs/sub_models/model2.pt'] # path to timm model file,
 
 sub_data : ['',''] # path to timm model class names
+
+'''
 ```
 
 ### Train sub model
@@ -45,3 +48,7 @@ train_submodel.py --args
     parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--batch_size', type=int, default=2, help='batch_size')
 ```
+
+
+
+this repository based on https://github.com/ultralytics/ultralytics
