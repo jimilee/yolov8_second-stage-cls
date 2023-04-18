@@ -1,9 +1,5 @@
 from ultralytics import YOLO
 
-# model = YOLO("pre/yolov8m.pt")  # load a pretrained model (recommended for training)
-# results = model.train(data="emb.yaml", epochs=500)  # train the model
-# metrics = model.val(data="emb.yaml", save=True)
-
 import os
 
 import cv2
@@ -31,7 +27,7 @@ class Detector:
 
         self.model = YOLO(weight)  # load a model
 
-    def infer_detect(self, path ='./dataset/EMB_dataset', target_labels=[]): # ./dataset/EMB_dataset
+    def infer_detect(self, path ='./sub_dataset/EMB_dataset', target_labels=[]): # ./sub_dataset/EMB_dataset
         if os.path.isdir(self.res_path+'predict/'):
             try:
                 for file in os.scandir(self.res_path+'predict/'):
@@ -45,15 +41,12 @@ class Detector:
         for x,y,z in tqdm(os.walk(f"{path}/images")): # iter per image
             for f in z:
                 img_path = f'{x}/{f}'
-                label_path = get_labelfile(img_path)
                 if img_path.endswith(('.jpg', '.JPG','.jpeg')):
-                    # label txt 확인
-                    if os.path.isfile(label_path):
-                        results = self.model(img_path, conf=0.5, save=False, verbose=False, target_labels=target_labels)  # infer model
-                        for r in results:
-                            if r.category in target_labels:
-                                total += 1
-                                cnt_true += r.result
+                    results = self.model(img_path, conf=0.5, save=False, verbose=False, target_labels=target_labels)  # infer model
+                    for r in results:
+                        if r.category in target_labels:
+                            total += 1
+                            cnt_true += r.result
 
         # for x,y,z in tqdm(os.walk(res_path)):
         #     for f in z:

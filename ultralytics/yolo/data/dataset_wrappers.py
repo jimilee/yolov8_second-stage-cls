@@ -7,10 +7,10 @@ from .augment import LetterBox
 
 
 class MixAndRectDataset:
-    """A wrapper of multiple images mixed dataset.
+    """A wrapper of multiple images mixed sub_dataset.
 
     Args:
-        dataset (:obj:`BaseDataset`): The dataset to be mixed.
+        dataset (:obj:`BaseDataset`): The sub_dataset to be mixed.
         transforms (Sequence[dict]): config dict to be composed.
     """
 

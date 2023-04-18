@@ -8,7 +8,7 @@ from ultralytics import YOLO
 
 model = YOLO("best.pt")  # load a pretrained model (recommended for training)
 
-path = '/home/jml/_workspace/yolov8_emb/ultralytics/yolo/data/datasets/EMB_dataset/images/' # test image folder.
+path = 'datasets/images' # test image folder.
 for x,y,z in os.walk(path):
     for f in z:
         img_path = f'{x}/{f}'
@@ -16,8 +16,8 @@ for x,y,z in os.walk(path):
             results = model(img_path, conf=0.35, save=True)  # train the model
             for r in results:
                 boxes = r.boxes
-                cls = r.cls
-                res = r.res
+                cls = r.classes
+                res = r.result
 
             # cv2.waitKey(0)
             # cv2.destroyAllWindows()

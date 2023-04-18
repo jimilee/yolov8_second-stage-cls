@@ -340,7 +340,7 @@ class BasePredictor:
     #         self.done_warmup = True
     #
     #     self.seen, self.windows, self.dt, self.batch = 0, [], (ops.Profile(), ops.Profile(), ops.Profile()), None
-    #     for batch in self.dataset:
+    #     for batch in self.sub_dataset:
     #         self.run_callbacks("on_predict_batch_start")
     #         self.batch = batch
     #         path, im, im0s, vid_cap, s = batch

@@ -23,7 +23,7 @@ HUB_API_ROOT = os.environ.get("ULTRALYTICS_HUB_API", "https://api.ultralytics.co
 def check_dataset_disk_space(url='https://ultralytics.com/assets/coco128.zip', sf=2.0):
     # Check that url fits on disk with safety factor sf, i.e. require 2GB free if url size is 1GB with sf=2.0
     gib = 1 << 30  # bytes per GiB
-    data = int(requests.head(url).headers['Content-Length']) / gib  # dataset size (GB)
+    data = int(requests.head(url).headers['Content-Length']) / gib  # sub_dataset size (GB)
     total, used, free = (x / gib for x in shutil.disk_usage("/"))  # bytes
     LOGGER.info(f'{PREFIX}{data:.3f} GB dataset, {free:.1f}/{total:.1f} GB free disk space')
     if data * sf < free:

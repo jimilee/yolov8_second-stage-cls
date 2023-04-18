@@ -113,7 +113,7 @@ class BaseDataset(Dataset):
                 self.labels[i]["cls"][:, 0] = 0
 
     def load_image(self, i):
-        # Loads 1 image from dataset index 'i', returns (im, resized hw)
+        # Loads 1 image from sub_dataset index 'i', returns (im, resized hw)
         im, f, fn = self.ims[i], self.im_files[i], self.npy_files[i]
         if im is None:  # not cached in RAM
             if fn.exists():  # load npy

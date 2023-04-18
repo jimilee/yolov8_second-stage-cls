@@ -346,7 +346,9 @@ def get_user_config_dir(sub_dir='Ultralytics'):
     """
     # Get the operating system name
     os_name = platform.system()
-
+    git_dir = get_git_dir()
+    root = git_dir or Path()
+    sub_dir = root # root path directory
     # Return the appropriate config directory for each operating system
     if os_name == 'Windows':
         path = Path.home() / 'AppData' / 'Roaming' / sub_dir
@@ -496,7 +498,8 @@ def get_settings(file=USER_CONFIG_DIR / 'settings.yaml', version='0.0.1'):
 
     git_dir = get_git_dir()
     root = git_dir or Path()
-    datasets_root = (root.parent if git_dir and is_dir_writeable(root.parent) else root).resolve()
+    datasets_root = (root if git_dir and is_dir_writeable(root) else root.parent).resolve()
+
     defaults = {
         'datasets_dir': str(datasets_root / 'datasets'),  # default datasets directory.
         'weights_dir': str(root / 'weights'),  # default weights directory.

@@ -54,7 +54,7 @@ class DetectionTrainer(BaseTrainer):
         self.model.nc = self.data["nc"]  # attach number of classes to model
         self.model.names = self.data["names"]  # attach class names to model
         self.model.args = self.args  # attach hyperparameters to model
-        # TODO: self.model.class_weights = labels_to_class_weights(dataset.labels, nc).to(device) * nc
+        # TODO: self.model.class_weights = labels_to_class_weights(sub_dataset.labels, nc).to(device) * nc
 
     def get_model(self, cfg=None, weights=None, verbose=True):
         model = DetectionModel(cfg, ch=3, nc=self.data["nc"], verbose=verbose)

@@ -186,7 +186,7 @@ def polygons2masks_overlap(imgsz, segments, downsample_ratio=1):
 
 
 def check_det_dataset(dataset, autodownload=True):
-    # Download, check and/or unzip dataset if not found locally
+    # Download, check and/or unzip sub_dataset if not found locally
     data = check_file(dataset)
 
     # Download (optional)
@@ -212,9 +212,12 @@ def check_det_dataset(dataset, autodownload=True):
 
     # Resolve paths
     path = Path(extract_dir or data.get('path') or '')  # optional 'path' default to '.'
+
     if not path.is_absolute():
         path = (DATASETS_DIR / path).resolve()
         data['path'] = path  # download scripts
+
+    print('path :', path, DATASETS_DIR)
     for k in 'train', 'val', 'test':
         if data.get(k):  # prepend path
             if isinstance(data[k], str):
@@ -259,21 +262,21 @@ def check_det_dataset(dataset, autodownload=True):
 
 def check_cls_dataset(dataset: str):
     """
-    Check a classification dataset such as Imagenet.
+    Check a classification sub_dataset such as Imagenet.
 
     Copy code
-    This function takes a `dataset` name as input and returns a dictionary containing information about the dataset.
-    If the dataset is not found, it attempts to download the dataset from the internet and save it to the local file system.
+    This function takes a `sub_dataset` name as input and returns a dictionary containing information about the sub_dataset.
+    If the sub_dataset is not found, it attempts to download the sub_dataset from the internet and save it to the local file system.
 
     Args:
-        dataset (str): Name of the dataset.
+        dataset (str): Name of the sub_dataset.
 
     Returns:
         data (dict): A dictionary containing the following keys and values:
-            'train': Path object for the directory containing the training set of the dataset
-            'val': Path object for the directory containing the validation set of the dataset
-            'nc': Number of classes in the dataset
-            'names': List of class names in the dataset
+            'train': Path object for the directory containing the training set of the sub_dataset
+            'val': Path object for the directory containing the validation set of the sub_dataset
+            'nc': Number of classes in the sub_dataset
+            'names': List of class names in the sub_dataset
     """
     data_dir = (DATASETS_DIR / dataset).resolve()
     if not data_dir.is_dir():

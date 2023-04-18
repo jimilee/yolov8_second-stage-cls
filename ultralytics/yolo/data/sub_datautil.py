@@ -14,8 +14,6 @@ import cv2
 #
 # from train_Oxy import OxyClassifier
 
-Train_config = {'image_size' : 224}
-
 def img_Contrast(img):
     lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
     l, a, b = cv2.split(lab)

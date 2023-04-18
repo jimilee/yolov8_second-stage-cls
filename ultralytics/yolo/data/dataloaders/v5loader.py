@@ -1,6 +1,6 @@
 # Ultralytics YOLO 🚀, GPL-3.0 license
 """
-Dataloaders and dataset utils
+Dataloaders and sub_dataset utils
 """
 
 import contextlib
@@ -123,7 +123,7 @@ def create_dataloader(path,
     if rect and shuffle:
         LOGGER.warning('WARNING ⚠️ --rect is incompatible with DataLoader shuffle, setting shuffle=False')
         shuffle = False
-    with torch_distributed_zero_first(rank):  # init dataset *.cache only once if DDP
+    with torch_distributed_zero_first(rank):  # init sub_dataset *.cache only once if DDP
         dataset = LoadImagesAndLabels(
             path,
             imgsz,
@@ -437,7 +437,7 @@ def img2label_paths(img_paths):
 
 class LoadImagesAndLabels(Dataset):
     # YOLOv5 train_loader/val_loader, loads images and labels for training and validation
-    cache_version = 0.6  # dataset labels *.cache version
+    cache_version = 0.6  # sub_dataset labels *.cache version
     rand_interp_methods = [cv2.INTER_NEAREST, cv2.INTER_LINEAR, cv2.INTER_CUBIC, cv2.INTER_AREA, cv2.INTER_LANCZOS4]
 
     def __init__(self,
@@ -518,7 +518,7 @@ class LoadImagesAndLabels(Dataset):
         # Filter images
         if min_items:
             include = np.array([len(x) >= min_items for x in self.labels]).nonzero()[0].astype(int)
-            LOGGER.info(f'{prefix}{n - len(include)}/{n} images filtered from dataset')
+            LOGGER.info(f'{prefix}{n - len(include)}/{n} images filtered from sub_dataset')
             self.im_files = [self.im_files[i] for i in include]
             self.label_files = [self.label_files[i] for i in include]
             self.labels = [self.labels[i] for i in include]
@@ -599,7 +599,7 @@ class LoadImagesAndLabels(Dataset):
             im = cv2.imread(random.choice(self.im_files))  # sample image
             ratio = self.img_size / max(im.shape[0], im.shape[1])  # max(h, w)  # ratio
             b += im.nbytes * ratio ** 2
-        mem_required = b * self.n / n  # GB required to cache dataset into RAM
+        mem_required = b * self.n / n  # GB required to cache sub_dataset into RAM
         mem = psutil.virtual_memory()
         cache = mem_required * (1 + safety_margin) < mem.available  # to cache or not to cache, that is the question
         if not cache:
@@ -609,7 +609,7 @@ class LoadImagesAndLabels(Dataset):
         return cache
 
     def cache_labels(self, path=Path('./labels.cache'), prefix=''):
-        # Cache dataset labels, check images and read shapes
+        # Cache sub_dataset labels, check images and read shapes
         if path.exists():
             path.unlink()  # remove *.cache file if exists
         x = {}  # dict
@@ -652,7 +652,7 @@ class LoadImagesAndLabels(Dataset):
 
     # def __iter__(self):
     #     self.count = -1
-    #     print('ran dataset iter')
+    #     print('ran sub_dataset iter')
     #     #self.shuffled_vector = np.random.permutation(self.nF) if self.augment else np.arange(self.nF)
     #     return self
 
@@ -731,7 +731,7 @@ class LoadImagesAndLabels(Dataset):
         return torch.from_numpy(img), labels_out, self.im_files[index], shapes
 
     def load_image(self, i):
-        # Loads 1 image from dataset index 'i', returns (im, original hw, resized hw)
+        # Loads 1 image from sub_dataset index 'i', returns (im, original hw, resized hw)
         im, f, fn = self.ims[i], self.im_files[i], self.npy_files[i],
         if im is None:  # not cached in RAM
             if fn.exists():  # load npy
@@ -925,7 +925,7 @@ def flatten_recursive(path=DATASETS_DIR / 'coco128'):
 
 
 def extract_boxes(path=DATASETS_DIR / 'coco128'):  # from utils.dataloaders import *; extract_boxes()
-    # Convert detection dataset into classification dataset, with one directory per class
+    # Convert detection sub_dataset into classification sub_dataset, with one directory per class
     path = Path(path)  # images dir
     shutil.rmtree(path / 'classification') if (path / 'classification').is_dir() else None  # remove existing
     files = list(path.rglob('*.*'))
@@ -959,7 +959,7 @@ def extract_boxes(path=DATASETS_DIR / 'coco128'):  # from utils.dataloaders impo
 
 
 def autosplit(path=DATASETS_DIR / 'coco128/images', weights=(0.9, 0.1, 0.0), annotated_only=False):
-    """ Autosplit a dataset into train/val/test splits and save path/autosplit_*.txt files
+    """ Autosplit a sub_dataset into train/val/test splits and save path/autosplit_*.txt files
     Usage: from utils.dataloaders import *; autosplit()
     Arguments
         path:            Path to images directory
@@ -1037,11 +1037,11 @@ def verify_image_label(args):
 
 
 class HUBDatasetStats():
-    """ Class for generating HUB dataset JSON and `-hub` dataset directory
+    """ Class for generating HUB sub_dataset JSON and `-hub` sub_dataset directory
 
     Arguments
         path:           Path to data.yaml or data.zip (with data.yaml inside data.zip)
-        autodownload:   Attempt to download dataset if not found locally
+        autodownload:   Attempt to download sub_dataset if not found locally
 
     Usage
         from utils.dataloaders import HUBDatasetStats
@@ -1061,7 +1061,7 @@ class HUBDatasetStats():
         except Exception as e:
             raise Exception("error/HUB/dataset_stats/yaml_load") from e
 
-        check_det_dataset(data, autodownload)  # download dataset if missing
+        check_det_dataset(data, autodownload)  # download sub_dataset if missing
         self.hub_dir = Path(data['path'] + '-hub')
         self.im_dir = self.hub_dir / 'images'
         self.im_dir.mkdir(parents=True, exist_ok=True)  # makes /images
@@ -1085,13 +1085,13 @@ class HUBDatasetStats():
             return False, None, path
         assert Path(path).is_file(), f'Error unzipping {path}, file not found'
         unzip_file(path, path=path.parent)
-        dir = path.with_suffix('')  # dataset directory == zip name
+        dir = path.with_suffix('')  # sub_dataset directory == zip name
         assert dir.is_dir(), f'Error unzipping {path}, {dir} not found. path/to/abc.zip MUST unzip to path/to/abc/'
         return True, str(dir), self._find_yaml(dir)  # zipped, data_dir, yaml_path
 
     def _hub_ops(self, f, max_dim=1920):
-        # HUB ops for 1 image 'f': resize and save at reduced quality in /dataset-hub for web/app viewing
-        f_new = self.im_dir / Path(f).name  # dataset-hub image filename
+        # HUB ops for 1 image 'f': resize and save at reduced quality in /sub_dataset-hub for web/app viewing
+        f_new = self.im_dir / Path(f).name  # sub_dataset-hub image filename
         try:  # use PIL
             im = Image.open(f)
             r = max_dim / max(im.height, im.width)  # ratio
@@ -1108,7 +1108,7 @@ class HUBDatasetStats():
             cv2.imwrite(str(f_new), im)
 
     def get_json(self, save=False, verbose=False):
-        # Return dataset JSON for Ultralytics HUB
+        # Return sub_dataset JSON for Ultralytics HUB
         def _round(labels):
             # Update labels to integer class and 6 decimal place floats
             return [[int(c), *(round(x, 4) for x in points)] for c, *points in labels]
@@ -1117,7 +1117,7 @@ class HUBDatasetStats():
             if self.data.get(split) is None:
                 self.stats[split] = None  # i.e. no test set
                 continue
-            dataset = LoadImagesAndLabels(self.data[split])  # load dataset
+            dataset = LoadImagesAndLabels(self.data[split])  # load sub_dataset
             x = np.array([
                 np.bincount(label[:, 0].astype(int), minlength=self.data['nc'])
                 for label in tqdm(dataset.labels, total=dataset.n, desc='Statistics')])  # shape(128x80)
@@ -1147,7 +1147,7 @@ class HUBDatasetStats():
         for split in 'train', 'val', 'test':
             if self.data.get(split) is None:
                 continue
-            dataset = LoadImagesAndLabels(self.data[split])  # load dataset
+            dataset = LoadImagesAndLabels(self.data[split])  # load sub_dataset
             desc = f'{split} images'
             total = dataset.n
             with ThreadPool(NUM_THREADS) as pool:
@@ -1201,7 +1201,7 @@ def create_classification_dataloader(path,
                                      workers=8,
                                      shuffle=True):
     # Returns Dataloader object to be used with YOLOv5 Classifier
-    with torch_distributed_zero_first(rank):  # init dataset *.cache only once if DDP
+    with torch_distributed_zero_first(rank):  # init sub_dataset *.cache only once if DDP
         dataset = ClassificationDataset(root=path, imgsz=imgsz, augment=augment, cache=cache)
     batch_size = min(batch_size, len(dataset))
     nd = torch.cuda.device_count()

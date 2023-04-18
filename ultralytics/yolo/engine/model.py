@@ -147,10 +147,10 @@ class YOLO:
     @smart_inference_mode()
     def val(self, data=None, **kwargs):
         """
-        Validate a model on a given dataset .
+        Validate a model on a given sub_dataset .
 
         Args:
-            data (str): The dataset to validate on. Accepts all formats accepted by yolo
+            data (str): The sub_dataset to validate on. Accepts all formats accepted by yolo
             **kwargs : Any other args accepted by the validators. To see all args check 'configuration' section in docs
         """
         overrides = self.overrides.copy()
@@ -182,7 +182,7 @@ class YOLO:
 
     def train(self, **kwargs):
         """
-        Trains the model on a given dataset.
+        Trains the model on a given sub_dataset.
 
         Args:
             **kwargs (Any): Any number of arguments representing the training configuration.

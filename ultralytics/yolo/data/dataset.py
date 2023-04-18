@@ -14,7 +14,7 @@ from .utils import HELP_URL, LOCAL_RANK, get_hash, img2label_paths, verify_image
 
 
 class YOLODataset(BaseDataset):
-    cache_version = 1.0  # dataset labels *.cache version, >= 1.0 for YOLOv8
+    cache_version = 1.0  # sub_dataset labels *.cache version, >= 1.0 for YOLOv8
     rand_interp_methods = [cv2.INTER_NEAREST, cv2.INTER_LINEAR, cv2.INTER_CUBIC, cv2.INTER_AREA, cv2.INTER_LANCZOS4]
     """YOLO Dataset.
     Args:
@@ -46,7 +46,7 @@ class YOLODataset(BaseDataset):
                          single_cls)
 
     def cache_labels(self, path=Path("./labels.cache")):
-        # Cache dataset labels, check images and read shapes
+        # Cache sub_dataset labels, check images and read shapes
         if path.exists():
             path.unlink()  # remove *.cache file if exists
         x = {"labels": []}
@@ -119,14 +119,14 @@ class YOLODataset(BaseDataset):
         [cache.pop(k) for k in ("hash", "version", "msgs")]  # remove items
         labels = cache["labels"]
 
-        # Check if the dataset is all boxes or all segments
+        # Check if the sub_dataset is all boxes or all segments
         len_boxes = sum(len(lb["bboxes"]) for lb in labels)
         len_segments = sum(len(lb["segments"]) for lb in labels)
         if len_segments and len_boxes != len_segments:
             LOGGER.warning(
                 f"WARNING ⚠️ Box and segment counts should be equal, but got len(segments) = {len_segments}, "
                 f"len(boxes) = {len_boxes}. To resolve this only boxes will be used and all segments will be removed. "
-                "To avoid this please supply either a detect or segment dataset, not a detect-segment mixed dataset.")
+                "To avoid this please supply either a detect or segment sub_dataset, not a detect-segment mixed sub_dataset.")
             for lb in labels:
                 lb["segments"] = []
         nl = len(np.concatenate([label["cls"] for label in labels], 0))  # number of labels
@@ -177,7 +177,7 @@ class YOLODataset(BaseDataset):
 
     @staticmethod
     def collate_fn(batch):
-        # TODO: returning a dict can make thing easier and cleaner when using dataset in training
+        # TODO: returning a dict can make thing easier and cleaner when using sub_dataset in training
         # but I don't know if this will slow down a little bit.
         new_batch = {}
         keys = batch[0].keys()

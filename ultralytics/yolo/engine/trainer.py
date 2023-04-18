@@ -58,8 +58,8 @@ class BaseTrainer:
         amp (bool): Flag to enable AMP (Automatic Mixed Precision).
         scaler (amp.GradScaler): Gradient scaler for AMP.
         data (str): Path to data.
-        trainset (torch.utils.data.Dataset): Training dataset.
-        testset (torch.utils.data.Dataset): Testing dataset.
+        trainset (torch.utils.data.Dataset): Training sub_dataset.
+        testset (torch.utils.data.Dataset): Testing sub_dataset.
         ema (nn.Module): EMA (Exponential Moving Average) of the model.
         lf (nn.Module): Loss function.
         scheduler (torch.optim.lr_scheduler._LRScheduler): Learning rate scheduler.

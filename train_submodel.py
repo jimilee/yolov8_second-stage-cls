@@ -1,7 +1,10 @@
 import argparse
+import glob
+import shutil
 import warnings
 
 import albumentations as A
+import pandas as pd
 from albumentations.pytorch.transforms import ToTensorV2
 from ultralytics.yolo.utils import checks
 import numpy as np
@@ -23,6 +26,7 @@ import pickle
 
 from trainng import *
 from detector import Detector
+from datautils.prepare_StanfordDog import prepare_dataset
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
@@ -106,24 +110,25 @@ def run_training(model, m_p, train_loader, valid_loader, optimizer, scheduler, d
 
     return model, history
 
+
 def parse_opt():
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--data', nargs='+', type=str,
-                        default='ultralytics/yolo/cfg/default.yaml',
+                        default='ultralytics/yolo/cfg/stanford_dogs.yaml',
                         help='*.yaml path') #
     parser.add_argument('--test_path', nargs='+', type=str,
-                        default='/home/jml/_workspace/yolov8_emb/ultralytics/yolo/data/datasets/EMB_dataset',
-                        help='test dataset path for detector(!None cropped images! just original detection dataset path)')
+                        default='datasets/stanford_dogs/Images',
+                        help='test sub_dataset path for detector(!None cropped images! just original detection sub_dataset path)')
     parser.add_argument('--det_w', nargs='+', type=str,
-                        default="best.pt",
+                        default="yolov8m.pt",
                         help='trained detector weight path.')
     parser.add_argument('--epoch', type=int, default=3, help='train epochs')
     parser.add_argument('--name', type=str, default='tf_efficientnet_b0', help='timm model name')
     parser.add_argument('--imgsz', '--img', '--img-size', nargs='+', type=int, default=224, help='inference size h,w')
     parser.add_argument('--lr', type=float, default=0.0001, help='maximum detections per image')
     parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
-    parser.add_argument('--batch_size', type=int, default=2, help='batch_size')
+    parser.add_argument('--batch_size', type=int, default=16, help='batch_size')
 
     opt = parser.parse_args()
     return opt
@@ -147,17 +152,17 @@ def main(opt):
         print(f"check {opt.data} plz. Length of data must be same.")
         exit()
 
-
-
-    for cid, d_p, m_p, name in zip(category, dataset_p, model_path, names):
+    for idx, cid, d_p, m_p, name in zip(range(len(category)), category, dataset_p, model_path, names):
         train_path = f'{d_p}/train/'
         valid_path = f'{d_p}/valid/'
+        if not os.path.isdir(train_path) or not os.path.isdir(valid_path):
+            prepare_dataset(d_p)
         train_dataset = ImageFolder(train_path, transform=Transforms(transforms=trans['train']))
         valid_dataset = ImageFolder(valid_path, transform=Transforms(transforms=trans['valid']))
         train_loader = DataLoader(train_dataset, batch_size=opt.batch_size, shuffle=True, num_workers=4)
         valid_loader = DataLoader(valid_dataset, batch_size=opt.batch_size, shuffle=False, num_workers=4)
         # check label json.
-        jp = _cfg['sub_data'][cid]
+        jp = _cfg['sub_data'][idx]
         l_p = save_dir + f'/label_data_{cid}.pkl'  # default pkl path
         if not checks.check_pkl(jp, len(train_dataset.classes)) or not os.path.isfile(l_p):
             _cfg['sub_data'].append(f"{l_p}")

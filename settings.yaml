@@ -1,0 +1,6 @@
+datasets_dir: /home/jml/_workspace/yolov8_second-stage-cls/datasets
+weights_dir: /home/jml/_workspace/yolov8_second-stage-cls/weights
+runs_dir: /home/jml/_workspace/yolov8_second-stage-cls/runs
+sync: true
+uuid: 88974379436393
+settings_version: 0.0.1
