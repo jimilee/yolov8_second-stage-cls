@@ -72,6 +72,7 @@ class YOLO:
             cfg (str): model configuration file
             verbose (bool): display model info on load
         """
+        #
         cfg = check_yaml(cfg)  # check YAML
         cfg_dict = yaml_load(cfg, append_filename=True)  # model dict
         self.task = guess_model_task(cfg_dict)

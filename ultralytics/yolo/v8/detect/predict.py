@@ -72,7 +72,7 @@ class DetectionPredictor(BasePredictor):
                 c = int(cls)  # integer class
                 label = None if self.args.hide_labels else (
                    self.model.names[c] if self.args.hide_conf else (
-                       str(sub_res) if self.args.sub else (f'{self.model.names[c]} {conf:.2f}')
+                       str(sub_res) if (self.args.sub and sub_res != "None") else (f'{self.model.names[c]} {conf:.2f}')
                    ))
 
                 #print(label, d.xyxy.squeeze())

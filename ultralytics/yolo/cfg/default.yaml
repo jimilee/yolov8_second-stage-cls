@@ -9,8 +9,8 @@ sub: True
 target_labels: [0, 1] # target label index for sub_classification
 sub_names: [ 'tf_efficientnet_b0', 'tf_efficientnet_b0'] # timm model name
 
-sub_train:  ['sub_dataset/0']#  sub_dataset path for classifier(cropped images)'
-            #'sub_dataset/1']                                            # sub_dataset/0/
+sub_train:  ['sub_dataset/0' ,'sub_dataset/1']  #  sub_dataset path for classifier(cropped images)'
+                                                                                      # sub_dataset/0/
                                                                                      #  ㄴtrain/
                                                                                      #    ㄴ0/...11/ ...*.jpg (class folder)
                                                                                      #  ㄴvalid/

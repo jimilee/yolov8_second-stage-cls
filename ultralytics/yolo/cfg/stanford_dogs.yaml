@@ -17,7 +17,7 @@ sub_train:  ['datasets/stanford_dogs/Cropped']#  sub_dataset path for classifier
                                                                                      #    ㄴ0/...11/ ... (class folder)
 sub_model: ['runs/sub_models/model1.pt'] # path to timm model file,
 
-sub_data : ['',''] # path to timm model class names (.pkl)
+sub_data : [''] # path to timm model class names (.pkl)
 
 # Train settings -------------------------------------------------------------------------------------------------------
 model:  # path to model file, i.e. yolov8n.pt, yolov8n.yaml

@@ -7,7 +7,7 @@ import cv2
 from ultralytics import YOLO
 from PIL import Image
 from tqdm import tqdm
-
+from ultralytics.yolo.utils import yaml_load
 def get_labelfile(path):
     label_path = (path.split('/'))
     label_path[-3] = 'labels'
@@ -15,7 +15,7 @@ def get_labelfile(path):
     return '/'.join(label_path)
 
 class Detector:
-    def __init__(self, weight):
+    def __init__(self, weight, cfg):
         self.res_path = '/runs/detect/'
         if os.path.isdir(self.res_path + 'predict/'):
             try:
@@ -26,6 +26,8 @@ class Detector:
                 print("Error: %s : %s" % (self.res_path + 'predict/', e.strerror))
 
         self.model = YOLO(weight)  # load a model
+        self.cfg = yaml_load(cfg)
+
 
     def infer_detect(self, path ='./sub_dataset/EMB_dataset', target_labels=[]): # ./sub_dataset/EMB_dataset
         if os.path.isdir(self.res_path+'predict/'):
@@ -38,11 +40,15 @@ class Detector:
 
         total = 0
         cnt_true = 0
-        for x,y,z in tqdm(os.walk(f"{path}/images")): # iter per image
+        for x,y,z in tqdm(os.walk(f"{path}")): # iter per image
             for f in z:
                 img_path = f'{x}/{f}'
                 if img_path.endswith(('.jpg', '.JPG','.jpeg')):
-                    results = self.model(img_path, conf=0.5, save=False, verbose=False, target_labels=target_labels)  # infer model
+                    results = self.model(img_path, conf=0.5, save=True, verbose=False,
+                                         target_labels=target_labels,
+                                         sub_names=self.cfg['sub_names'],
+                                         sub_data=self.cfg['sub_data'],
+                                         sub_model=self.cfg['sub_model'])  # infer model
                     for r in results:
                         if r.category in target_labels:
                             total += 1
@@ -58,5 +64,5 @@ class Detector:
 
 if __name__ == '__main__':
     # opt = parse_opt()
-    detector = Detector(weight='weight.pt')
-    detector.infer_detect()
+    detector = Detector(weight='yolov8m.pt', cfg='ultralytics/yolo/cfg/stanford_dogs.yaml')
+    detector.infer_detect(path='datasets/stanford_dogs/Images', target_labels=[16])

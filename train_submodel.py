@@ -69,14 +69,14 @@ class Transforms:
         return self.transforms(image=np.array(img))
 
 
-def run_training(model, m_p, train_loader, valid_loader, optimizer, scheduler, device, num_epochs, test_path, weight, target_labels):
+def run_training(model, m_p, train_loader, valid_loader, optimizer, scheduler, device, num_epochs, test_path, det, target_labels):
     if torch.cuda.is_available():
         print("[INFO] Using GPU: {}\n".format(torch.cuda.get_device_name()))
 
     best_model_wts = copy.deepcopy(model.state_dict())
     best_epoch_acc = np.inf
     history = defaultdict(list)
-    det = Detector(weight=weight)
+
     # bar = tqdm(range(1, num_epochs + 1), total=num_epochs)
     for epoch in range(1, num_epochs + 1):
         gc.collect()
@@ -101,12 +101,13 @@ def run_training(model, m_p, train_loader, valid_loader, optimizer, scheduler, d
 
             print(f"Epoch={epoch}, Train_Loss={train_epoch_loss:.4f}, Valid_Loss = {val_epoch_loss:.4f}, Acc={det_epoch_acc:.4f},"
                   f"LR={optimizer.param_groups[0]['lr']}")
-    if epoch == 1:
-        torch.save(model.state_dict(), f"{m_p}")
-    else:
-        torch.save(model.state_dict(),
-                   "{}/Acc{:.4f}_epoch{:.0f}.pt".format('sub_models', best_epoch_acc, best_epoch))
-        model.load_state_dict(best_model_wts)
+        if epoch == 1:
+            torch.save(model.state_dict(), f"{m_p}")
+        else:
+            if epoch%100==0:
+                torch.save(model.state_dict(),
+                           "{}/Acc{:.4f}_epoch{:.0f}.pt".format('sub_models', best_epoch_acc, best_epoch))
+            model.load_state_dict(best_model_wts)
 
     return model, history
 
@@ -128,7 +129,7 @@ def parse_opt():
     parser.add_argument('--imgsz', '--img', '--img-size', nargs='+', type=int, default=224, help='inference size h,w')
     parser.add_argument('--lr', type=float, default=0.0001, help='maximum detections per image')
     parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
-    parser.add_argument('--batch_size', type=int, default=16, help='batch_size')
+    parser.add_argument('--batch_size', type=int, default=64, help='batch_size')
 
     opt = parser.parse_args()
     return opt
@@ -152,6 +153,7 @@ def main(opt):
         print(f"check {opt.data} plz. Length of data must be same.")
         exit()
 
+    det = Detector(weight=opt.det_w, cfg=opt.data)
     for idx, cid, d_p, m_p, name in zip(range(len(category)), category, dataset_p, model_path, names):
         train_path = f'{d_p}/train/'
         valid_path = f'{d_p}/valid/'
@@ -178,11 +180,11 @@ def main(opt):
         scheduler = fetch_scheduler(optimizer)
 
         model, history = run_training(model, m_p, train_loader, valid_loader,
-                                        optimizer, scheduler, device=device, num_epochs=opt.epoch, test_path=opt.test_path,
-                                      weight= opt.det_w, target_labels=[cid])
+                                        optimizer, scheduler, num_epochs=opt.epoch, test_path=opt.test_path,
+                                      det= det, target_labels=[cid], device=device)
 
     #test model
-    det_acc = infer_detect(weight=opt.det_w, path=opt.test_path, target_labels=category)
+    det_acc = infer_detect(path=opt.test_path, target_labels=category)
     print("final Acc :", det_acc)
 
 if __name__ == '__main__':

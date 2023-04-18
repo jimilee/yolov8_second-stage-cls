@@ -88,7 +88,7 @@ class BasePredictor:
         # Usable if setup is done
         self.model = None
         self.sub_model = {}
-        self.labels = []
+        self.labels = {}
         # self.target_labels = self.args.target_labels # target labels
         self.data = self.args.data  # data_dict
         self.bs = None
@@ -126,7 +126,7 @@ class BasePredictor:
         for d in list(det):
             cls, conf = d.cls.squeeze(), d.conf.squeeze()
             c = int(cls)  # integer class
-
+            # sub_str = c
             # Second-stage classifier
             if c in self.args.target_labels:
                 imc = im0.copy()
@@ -159,15 +159,15 @@ class BasePredictor:
                     # print(out[0])
                     # print(c, len(out[0]), out.argmax(dim=1).item(), max(out[0]), out[0][out.argmax(dim=1).item()])
                     _idx = out.argmax(dim=1).item()
-                    # print(self.labels[c][363])
                     _lidx = self.labels[c][_idx].split('_')
-
+                    #
+                    # print(c, _idx, str(_lidx[1]), _correct, str(_lidx[1]) == _correct)
                     if _correct != -1 : # if folder name is digit. --> check result.
                         if str(_correct).isdigit():
                             sub_str = f'[ {str(_lidx[0])} ]_{str(_lidx[1])} / {str(int(_lidx[1]) == _correct)}'
                             isTrue = int(_lidx[1]) == _correct
                         else:
-                            sub_str = f'[ {str(_lidx[0])} ]_{str(_lidx[1])} / {str(int(_lidx[1]) == _correct)}'
+                            sub_str = f'{str(_lidx[1])} / {str((_lidx[1]) == _correct)}'
                             isTrue = str(_lidx[1]) == _correct
                         # print(isTrue)
 
@@ -283,17 +283,6 @@ class BasePredictor:
                 if self.args.sub: # Sub Classification
                     sub_str, sub_res, isTrue = self.second_stage_process(i, self.results, (p, im, im0), self.classes)
                     self.sub_results.append(sub_res)
-                    #
-                    # # LKJ
-                    # if sub_res == None:
-                    #     # print("infered_value is None")
-                    #     Inference.infered_value = ""
-                    # elif sub_res.cls == None:
-                    #     # print("infered_value class is None")
-                    #     Inference.infered_value = ""
-                    # else:
-                    #     # print("infered_value:" + str(sub_res.cls))
-                    #     Inference.infered_value = sub_res.cls[0]
 
                 if self.args.verbose or self.args.save or self.args.save_txt or self.args.show:
                     s += self.write_results(i, self.results, (p, im, im0), sub_str)
@@ -401,16 +390,18 @@ class BasePredictor:
         sub_weights_paths = self.args.sub_model # model path.
         sub_labels_paths = self.args.sub_data
         model_name = self.args.sub_names
-        for i in self.args.target_labels:
+        for i, lid in enumerate(self.args.target_labels):
             wp, jp = sub_weights_paths[i], sub_labels_paths[i]
             if not os.path.isfile(jp):
                 save_dir = '/'.join(wp.split('/')[:-1])
-                jp = save_dir + f'/label_data_{i}.pkl' # default pkl path
+                jp = save_dir + f'/label_data_{lid}.pkl' # default pkl path
+            # self.labels[lid] = []
             with open(jp, 'rb') as f:
                 label_ = pickle.load(f)
-                self.labels.append(label_)
+                self.labels[lid] = label_
 
             nc = len(label_)
+            # print('setup :',model_name[i], nc)
             model = timm.create_model(model_name=model_name[i], num_classes=nc)
 
             if os.path.isfile(wp):
@@ -419,7 +410,7 @@ class BasePredictor:
             model.to(self.device)
             model.eval()
 
-            self.sub_model[i]=model
+            self.sub_model[lid]=model
 
             # trained_weights = torch.load(sub_weights, map_location=device)
             # self.sub_model.load_state_dict(trained_weights)
