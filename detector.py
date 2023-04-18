@@ -29,7 +29,7 @@ class Detector:
         self.cfg = yaml_load(cfg)
 
 
-    def infer_detect(self, path ='./sub_dataset/EMB_dataset', target_labels=[]): # ./sub_dataset/EMB_dataset
+    def infer_detect(self, path ='./sub_dataset/', target_labels=[]): # ./sub_dataset/EMB_dataset
         if os.path.isdir(self.res_path+'predict/'):
             try:
                 for file in os.scandir(self.res_path+'predict/'):

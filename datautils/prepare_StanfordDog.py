@@ -45,7 +45,11 @@ def prepare_dataset(path, split=0.2):
 
         shutil.move(t_p[0], os.path.join(valid_path, l_f, f))
 
-
+    for l in labels:  # rm label folders
+        try:
+            os.rmdir(f'{path}/{l}/')
+        except:
+            continue
         # l_f = t_p.split('/')[-2]
         # if not os.path.isdir(os.path.join(train_path, l_f)):
         #     os.mkdir(os.path.join(train_path, l_f))
@@ -54,7 +58,7 @@ def prepare_dataset(path, split=0.2):
 
 def make_cropped_dataset(annot_path, image_path, result_path):
     for _label in tqdm(os.listdir(image_path)):
-        save_p = os.path.join(result_path, _label)
+        save_p = os.path.join(result_path, _label[10:])
         if not os.path.isdir(save_p):
             os.mkdir(save_p)
 
@@ -77,7 +81,8 @@ def make_cropped_dataset(annot_path, image_path, result_path):
                 # cv2.imshow('cr',crop)
                 # cv2.waitKey()
 
-annot_path = '../datasets/stanford_dogs/Annotation/'
-image_path = '../datasets/stanford_dogs/Images/'
-result_path = '../datasets/stanford_dogs/Cropped/'
-# make_cropped_dataset(annot_path, image_path, result_path)
+if __name__ == '__main__':
+    annot_path = '../datasets/stanford_dogs/Annotation/'
+    image_path = '../datasets/stanford_dogs/Images/'
+    result_path = '../datasets/stanford_dogs/Cropped/'
+    make_cropped_dataset(annot_path, image_path, result_path)
