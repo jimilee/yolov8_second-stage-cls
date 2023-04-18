@@ -147,7 +147,8 @@ class BasePredictor:
                     if str(p).split('/')[-2].isdigit(): # if digit
                         _correct = int(str(p).split('/')[-2])
                     else:
-                        _correct = str(p).split('/')[-2]
+                        # _correct = str(p).split('/')[-2]
+                        _correct = str(p).split('/')[-2][10:] # dogs
                 except:
                     _correct = -1
 

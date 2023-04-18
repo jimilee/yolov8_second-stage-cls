@@ -184,7 +184,7 @@ def main(opt):
                                       det= det, target_labels=[cid], device=device)
 
     #test model
-    det_acc = infer_detect(path=opt.test_path, target_labels=category)
+    det_acc = det.infer_detect(path=opt.test_path, target_labels=category)
     print("final Acc :", det_acc)
 
 if __name__ == '__main__':

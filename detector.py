@@ -51,6 +51,7 @@ class Detector:
                                          sub_model=self.cfg['sub_model'])  # infer model
                     for r in results:
                         if r.category in target_labels:
+                            # print(r.result, r.classes)
                             total += 1
                             cnt_true += r.result
 
