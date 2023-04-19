@@ -80,7 +80,7 @@ def run_training(model, m_p, train_loader, valid_loader, optimizer, scheduler, d
         LOGGER.info("[INFO] Using GPU: {}\n".format(torch.cuda.get_device_name()))
 
     best_model_wts = copy.deepcopy(model.state_dict())
-    best_epoch_acc = np.inf
+    best_epoch_acc = 0
     history = defaultdict(list)
 
     # bar = tqdm(range(1, num_epochs + 1), total=num_epochs)
@@ -94,7 +94,7 @@ def run_training(model, m_p, train_loader, valid_loader, optimizer, scheduler, d
         if epoch > 1: #
             det_epoch_acc = det.infer_detect(path=test_path, target_labels=target_labels)
 
-            if det_epoch_acc <= best_epoch_acc:
+            if det_epoch_acc > best_epoch_acc:
                 LOGGER.info(f"Detection Acc Improved ({best_epoch_acc} ---> {det_epoch_acc})")
                 best_epoch_acc = det_epoch_acc
                 if not os.path.isdir('{0}/'.format('sub_models')):
