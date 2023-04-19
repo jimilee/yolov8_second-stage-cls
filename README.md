@@ -32,13 +32,13 @@ python train_submodel.py
 
 train_submodel.py --args
 ```
-    parser.add_argument('--data', nargs='+', type=str,
+    parser.add_argument('--data', type=str,
                         default='ultralytics/yolo/cfg/default.yaml',
                         help='*.yaml path') #
-    parser.add_argument('--test_path', nargs='+', type=str,
+    parser.add_argument('--test_path', type=str,
                         default='datasets',
                         help='test dataset path for detector(!None cropped images! just original detection dataset path)')
-    parser.add_argument('--det_w', nargs='+', type=str,
+    parser.add_argument('--det_w', type=str,
                         default="best.pt",
                         help='trained detector weight path.')
     parser.add_argument('--epoch', type=int, default=3, help='train epochs')
@@ -49,6 +49,28 @@ train_submodel.py --args
     parser.add_argument('--batch_size', type=int, default=2, help='batch_size')
 ```
 
+## [Ex] Train with Stanford Dogs Dataset
+Download dataset from homepage \
+[Image](http://vision.stanford.edu/aditya86/ImageNetDogs/images.tar) \
+[Annotations](http://vision.stanford.edu/aditya86/ImageNetDogs/annotation.tar)
 
+unzip into  'datasets/stanford_dogs/'
+```
+/datasets/stanford_dogs/
+    ㄴImages/
+      ㄴn02085620-Chihuahua/ ...
+    ㄴAnnotation
+      ㄴn02085620-Chihuahua/ ...
+```
+prepare dataset for train
+```commandline
+python datautils/prepare_StanfordDog.py 
+```
+modify .yaml file \
+parse args & train stanford Dogs
+```commandline
+python train_submodel.py --data ultralytics/yolo/cfg/stanford_dogs.yaml --test_path datasets/stanford_dogs/Images --det_w yolov8m.pt
+```
+for detection, you can use pre-trained detection yolov8 model  
 
 this repository based on https://github.com/ultralytics/ultralytics

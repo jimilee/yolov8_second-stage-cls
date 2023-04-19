@@ -7,7 +7,7 @@ mode: train  # YOLO mode, i.e. train, val, predict, export
 # Sub classification setting
 sub: True
 target_labels: [16] # target label index for sub_classification
-sub_names: [ 'tf_efficientnet_b0'] # timm model name
+sub_names: [ 'tf_efficientnet_b5'] # timm model name
 
 sub_train:  ['datasets/stanford_dogs/Cropped']#  sub_dataset path for classifier(cropped images)'
                                                                                     # sub_dataset/0/

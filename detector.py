@@ -29,7 +29,7 @@ class Detector:
         self.cfg = yaml_load(cfg)
 
 
-    def infer_detect(self, path ='./sub_dataset/', target_labels=[]): # ./sub_dataset/EMB_dataset
+    def infer_detect(self, path ='./sub_dataset/', target_labels=[], save=False): # ./sub_dataset/EMB_dataset
         if os.path.isdir(self.res_path+'predict/'):
             try:
                 for file in os.scandir(self.res_path+'predict/'):
@@ -43,8 +43,8 @@ class Detector:
         for x,y,z in tqdm(os.walk(f"{path}")): # iter per image
             for f in z:
                 img_path = f'{x}/{f}'
-                if img_path.endswith(('.jpg', '.JPG','.jpeg')):
-                    results = self.model(img_path, conf=0.5, save=True, verbose=False,
+                if img_path.endswith(('.jpg', '.JPG', '.jpeg', '.png')):
+                    results = self.model(img_path, conf=0.5, save=save, verbose=False,
                                          target_labels=target_labels,
                                          sub_names=self.cfg['sub_names'],
                                          sub_data=self.cfg['sub_data'],
@@ -64,6 +64,5 @@ class Detector:
         return cnt_true/total
 
 if __name__ == '__main__':
-    # opt = parse_opt()
     detector = Detector(weight='yolov8m.pt', cfg='ultralytics/yolo/cfg/stanford_dogs.yaml')
     detector.infer_detect(path='datasets/stanford_dogs/Images', target_labels=[16])

@@ -142,13 +142,14 @@ class BasePredictor:
                 # test_cl[-1] = 'e_'+test_cl[-1]
                 # test_cl = '/'.join(test_cl)
                 # cv2.imwrite(f"runs/test_for_class/{c}/{test_cl}", im1)
-
-                try:
-                    if str(p).split('/')[-2].isdigit(): # if digit
-                        _correct = int(str(p).split('/')[-2])
+                # check dir name
+                _d_n = str(p).split('/')[-2]
+                try:#
+                    if _d_n.isdigit(): # if digit
+                        _correct = int(_d_n)
                     else:
-                        # _correct = str(p).split('/')[-2]
-                        _correct = str(p).split('/')[-2][10:] # dogs
+                        _correct = _d_n # if string
+                        # _correct = str(p).split('/')[-2][10:]
                 except:
                     _correct = -1
 
