@@ -60,7 +60,7 @@ class Detector:
         #         img_path = f'{x}/{f}'
         #         if img_path.endswith(('.jpg', '.JPG','.jpeg')):
         #             cnt_false += 1
-        print(f'Total test images : {total} , Total False : {cnt_true}, Acc : {cnt_true/total}')
+        print(f'Total test images : {total} , Total True : {cnt_true}, Acc : {cnt_true/total}')
         return cnt_true/total
 
 if __name__ == '__main__':
