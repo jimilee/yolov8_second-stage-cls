@@ -71,7 +71,7 @@ def val_epoch(model,dataloader, device, epoch):
             epoch_loss = running_loss / dataset_size
             total_acc += coll
             total_batch += batch_size
-            bar.set_postfix(Epoch=epoch, Val_Loss=epoch_loss, Run_acc = running_acc)
+            bar.set_postfix(Epoch=epoch, Val_Loss=epoch_loss, Run_acc = running_acc, total_acc = total_acc / dataset_size)
         gc.collect()
 
-    return epoch_loss
+    return epoch_loss, total_acc / dataset_size

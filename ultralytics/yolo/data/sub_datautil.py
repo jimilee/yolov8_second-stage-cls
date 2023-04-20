@@ -106,30 +106,10 @@ def data_transforms_img(img_size):
     data_transforms = {
         "train":
             A.Compose([
-            # A.HueSaturationValue(
-            #     hue_shift_limit=0.2,
-            #     sat_shift_limit=0.2,
-            #     val_shift_limit=0.2,
-            #     p=0.5
-            # ),
-            # A.CLAHE(always_apply=False, p=0.5, clip_limit=(1, 5), tile_grid_size=(8, 8)),
-            # A.GridDistortion(always_apply=False, p=0.5, num_steps=5, distort_limit=(-0.3, 0.3), interpolation=0,
-            #                border_mode=0, value=(0, 0, 0), mask_value=None, normalized=False),
             A.LongestMaxSize(max_size=int(img_size * 1.0)),
             # min_size보다 작으면 pad
             A.PadIfNeeded(min_height=int(img_size * 1.0), min_width=int(img_size * 1.0),
                           border_mode=cv2.BORDER_CONSTANT),
-            # A.Resize(img_size, img_size),
-            # A.RandomSizedCrop(always_apply=False, p=0.5, min_max_height=(img_size-20, img_size), height=img_size, width=img_size, w2h_ratio=1.0,
-            #                 interpolation=0),
-            # A.Resize(img_size, img_size),
-            # # 이미지의 maxsize를 max_size로 rescale합니다. aspect ratio는 유지.
-            # A.LongestMaxSize(max_size=int(img_size * 1.0)),
-            # # min_size보다 작으면 pad
-            # A.PadIfNeeded(min_height=int(img_size * 1.0), min_width=int(img_size * 1.0),
-            #               border_mode=cv2.BORDER_CONSTANT),
-            # # A.ToGray(p=1),
-            # A.ShiftScaleRotate(p=1.0, shift_limit=(-0.05, 0.05), scale_limit=(-0.4, 0.0), rotate_limit=(-90, 90), interpolation=0, border_mode=0, value=(0, 0, 0), mask_value=None),
             A.Normalize(
                 mean=[0.485, 0.456, 0.406],
                 std=[0.229, 0.224, 0.225],

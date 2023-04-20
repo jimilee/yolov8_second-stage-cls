@@ -55,6 +55,7 @@ class Detector:
                             total += 1
                             cnt_true += r.result
 
+
         # for x,y,z in tqdm(os.walk(res_path)):
         #     for f in z:
         #         img_path = f'{x}/{f}'

@@ -100,7 +100,7 @@ class BasePredictor:
         self.annotator = None
         self.data_path = None
         self.callbacks = defaultdict(list, callbacks.default_callbacks)  # add callbacks
-        self.data_transforms = data_transforms_img(528) # sub_image size
+        self.data_transforms = None # sub_image size
 
 
     def preprocess(self, img):
@@ -393,6 +393,8 @@ class BasePredictor:
         sub_weights_paths = self.args.sub_model # model path.
         sub_labels_paths = self.args.sub_data
         model_name = self.args.sub_names
+        self.data_transforms = data_transforms_img(self.args.sub_imgsz)
+
         for i, lid in enumerate(self.args.target_labels):
             wp, jp = sub_weights_paths[i], sub_labels_paths[i]
             if not os.path.isfile(jp):

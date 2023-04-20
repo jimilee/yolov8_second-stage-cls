@@ -19,6 +19,8 @@ sub_model: ['runs/sub_models/model1.pt'] # path to timm model file,
 
 sub_data : [''] # path to timm model class names (.pkl)
 
+sub_imgsz: 224
+
 # Train settings -------------------------------------------------------------------------------------------------------
 model:  # path to model file, i.e. yolov8n.pt, yolov8n.yaml
 data:  # path to data file, i.e. i.e. coco128.yaml

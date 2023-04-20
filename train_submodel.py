@@ -15,6 +15,7 @@ import platform
 import os
 import copy
 import json
+import cv2
 from pathlib import Path
 from collections import defaultdict
 import timm
@@ -51,20 +52,39 @@ def fetch_scheduler(optimizer):
 def data_transforms_img(img_size):
     data_transforms = {
         'train': A.Compose([
-            A.Resize(img_size, img_size),
-            A.OneOf([A.Rotate(limit=10),
-                     A.RandomBrightness(),
-                     A.CoarseDropout(always_apply=False, p=0.5, max_holes=20,
-                                     max_height=15, max_width=15, min_holes=1,
-                                     min_height=8, min_width=8),
-                     A.Cutout(num_holes=8, max_h_size=1, max_w_size=1, fill_value=1),
-                     ], p=1.0),
-            A.GaussNoise(p=0.5),
-            A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-            ToTensorV2()]),
-        'valid': A.Compose([A.Resize(img_size, img_size),
+                # 이미지의 maxsize를 max_size로 rescale합니다. aspect ratio는 유지.
+                A.LongestMaxSize(max_size=int(img_size * 1.0)),
+                # min_size보다 작으면 pad
+                A.PadIfNeeded(min_height=int(img_size * 1.0), min_width=int(img_size * 1.0),
+                              border_mode=cv2.BORDER_CONSTANT),
+                A.OneOf([A.Rotate(limit=10),
+                         A.RandomBrightness(),
+                         A.CoarseDropout(always_apply=False, p=0.5, max_holes=20,
+                                         max_height=15, max_width=15, min_holes=1,
+                                         min_height=8, min_width=8),
+                         A.Cutout(num_holes=8, max_h_size=1, max_w_size=1, fill_value=1),
+                         ], p=1.0),
+                A.GaussNoise(p=0.5),
+                A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+                ToTensorV2()]),
+        'valid': A.Compose([
+                            A.LongestMaxSize(max_size=int(img_size * 1.0)),
+                            # min_size보다 작으면 pad
+                            A.PadIfNeeded(min_height=int(img_size * 1.0), min_width=int(img_size * 1.0),
+                                          border_mode=cv2.BORDER_CONSTANT),
                             A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
                             ToTensorV2()]),
+        "save": A.Compose([
+            # 이미지의 maxsize를 max_size로 rescale합니다. aspect ratio는 유지.
+            A.LongestMaxSize(max_size=int(img_size * 1.0)),
+            # min_size보다 작으면 pad
+            A.PadIfNeeded(min_height=int(img_size * 1.0), min_width=int(img_size * 1.0),
+                          border_mode=cv2.BORDER_CONSTANT),
+            # A.ToGray(p=1),
+            # A.Resize(img_size, img_size),
+            # A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+            # transforms_.ToTensorV2()
+        ])
     }
     return data_transforms
 
@@ -81,6 +101,7 @@ def run_training(model, m_p, train_loader, valid_loader, optimizer, scheduler, d
 
     best_model_wts = copy.deepcopy(model.state_dict())
     best_epoch_acc = 0
+
     history = defaultdict(list)
 
     # bar = tqdm(range(1, num_epochs + 1), total=num_epochs)
@@ -89,14 +110,13 @@ def run_training(model, m_p, train_loader, valid_loader, optimizer, scheduler, d
         train_epoch_loss = training_epoch(model, optimizer, scheduler,
                                     dataloader=train_loader,
                                     device=device, epoch=epoch)
-        val_epoch_loss = val_epoch(model,dataloader=valid_loader,
+        val_epoch_loss, val_acc = val_epoch(model,dataloader=valid_loader,
                                    device=device, epoch=epoch)
         if epoch > 1: #
-            det_epoch_acc = det.infer_detect(path=test_path, target_labels=target_labels)
-
-            if det_epoch_acc > best_epoch_acc:
-                LOGGER.info(f"Detection Acc Improved ({best_epoch_acc} ---> {det_epoch_acc})")
-                best_epoch_acc = det_epoch_acc
+            _acc = val_acc
+            if _acc > best_epoch_acc:
+                LOGGER.info(f"Valid Acc Improved ({best_epoch_acc} ---> {_acc})")
+                best_epoch_acc = _acc
                 if not os.path.isdir('{0}/'.format('sub_models')):
                     os.mkdir('{0}/'.format('sub_models'))
                 best_epoch = epoch
@@ -105,15 +125,36 @@ def run_training(model, m_p, train_loader, valid_loader, optimizer, scheduler, d
 
             LOGGER.info("\nBest Acc: {:.4f}".format(best_epoch_acc))
 
-            LOGGER.info(f"Epoch={epoch}, Train_Loss={train_epoch_loss:.4f}, Valid_Loss = {val_epoch_loss:.4f}, Acc={det_epoch_acc:.4f},"
+            LOGGER.info(f"Epoch={epoch}, Train_Loss={train_epoch_loss:.4f}, Valid_Loss = {val_epoch_loss:.4f}, Acc={_acc:.4f},"
                   f"LR={optimizer.param_groups[0]['lr']}")
+
         if epoch == 1:
             torch.save(model.state_dict(), f"{m_p}")
-        else:
-            if epoch%100==0:
-                torch.save(model.state_dict(),
-                           "{}/Acc{:.4f}_epoch{:.0f}.pt".format('sub_models', best_epoch_acc, best_epoch))
-            model.load_state_dict(best_model_wts)
+        elif epoch%100==0:
+            torch.save(model.state_dict(),
+                       "{}/Acc{:.4f}_epoch{:.0f}.pt".format('sub_models', best_epoch_acc, best_epoch))
+        model.load_state_dict(best_model_wts)
+
+    LOGGER.info(f"Training done! Detection acc process start.")
+    for step in range(1, 10):
+        gc.collect()
+        train_epoch_loss = training_epoch(model, optimizer, scheduler,
+                                          dataloader=train_loader,
+                                          device=device, epoch=step)
+        det_epoch_acc = det.infer_detect(path=test_path, target_labels=target_labels)
+        if det_epoch_acc > best_epoch_acc:
+            LOGGER.info(f"Detection Acc Improved ({best_epoch_acc} ---> {det_epoch_acc})")
+            best_epoch_acc = det_epoch_acc
+            if not os.path.isdir('{0}/'.format('sub_models')):
+                os.mkdir('{0}/'.format('sub_models'))
+            best_model_wts = copy.deepcopy(model.state_dict())
+            torch.save(model.state_dict(), f"{m_p}")
+
+        LOGGER.info("\nBest Acc: {:.4f}".format(det_epoch_acc))
+
+        LOGGER.info(f"Step={step}, Train_Loss={train_epoch_loss:.4f}, Acc={det_epoch_acc:.4f},"
+                    f"LR={optimizer.param_groups[0]['lr']}")
+        model.load_state_dict(best_model_wts)
 
     return model, history
 
@@ -144,7 +185,6 @@ def parse_opt(known=False):
                         default="yolov8m.pt",
                         help='trained detector weight path.')
     parser.add_argument('--epoch', type=int, default=100, help='train epochs')
-    parser.add_argument('--imgsz', '--img', '--img-size', nargs='+', type=int, default=224, help='inference size h,w')
     parser.add_argument('--lr', type=float, default=0.0001, help='maximum detections per image')
     parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--batch_size', type=int, default=16, help='batch_size')
@@ -166,7 +206,7 @@ def main(opt):
     if not os.path.isdir(save_dir):
         os.makedirs(save_dir, exist_ok=True)
 
-    trans = data_transforms_img(opt.imgsz)
+    trans = data_transforms_img(_cfg['sub_imgsz'])
 
     if len(names) != len(model_path) != len(dataset_p) != len(category):
         LOGGER.info(colorstr('red', 'bold', f"check {opt.data} plz. Length of data must be same."))
