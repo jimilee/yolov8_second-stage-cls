@@ -144,11 +144,10 @@ def parse_opt(known=False):
                         default="yolov8m.pt",
                         help='trained detector weight path.')
     parser.add_argument('--epoch', type=int, default=100, help='train epochs')
-    parser.add_argument('--name', type=str, default='tf_efficientnet_b0', help='timm model name')
     parser.add_argument('--imgsz', '--img', '--img-size', nargs='+', type=int, default=224, help='inference size h,w')
     parser.add_argument('--lr', type=float, default=0.0001, help='maximum detections per image')
     parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
-    parser.add_argument('--batch_size', type=int, default=32, help='batch_size')
+    parser.add_argument('--batch_size', type=int, default=16, help='batch_size')
 
     return parser.parse_args()
 

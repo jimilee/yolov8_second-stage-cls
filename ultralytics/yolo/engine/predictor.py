@@ -161,6 +161,7 @@ class BasePredictor:
                     # print(out[0])
                     # print(c, len(out[0]), out.argmax(dim=1).item(), max(out[0]), out[0][out.argmax(dim=1).item()])
                     _idx = out.argmax(dim=1).item()
+
                     _lidx = self.labels[c][_idx].split('_')
                     #
                     # print(c, _idx, str(_lidx[1]), _correct, str(_lidx[1]) == _correct)
@@ -403,7 +404,7 @@ class BasePredictor:
                 self.labels[lid] = label_
 
             nc = len(label_)
-            # print('setup :',model_name[i], nc)
+            print('setup :',model_name[i], nc)
             model = timm.create_model(model_name=model_name[i], num_classes=nc)
 
             if os.path.isfile(wp):
@@ -411,8 +412,7 @@ class BasePredictor:
                 model.load_state_dict(checkpoint)
             model.to(self.device)
             model.eval()
-
-            self.sub_model[lid]=model
+            self.sub_model[lid] = model
 
             # trained_weights = torch.load(sub_weights, map_location=device)
             # self.sub_model.load_state_dict(trained_weights)
